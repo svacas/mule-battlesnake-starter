@@ -53,6 +53,17 @@ On every turn of each game your Battlesnake receives information about the game 
 
 See the [Battlesnake Game Rules](https://docs.battlesnake.com/references/rules) for more information on playing the game, moving around the board, and improving your algorithm.
 
+### Fast iteration mode
+
+To avoid redeploying the app every time the behavior is modified, the DataWeave script can be updated with the following POST request:
+
+```
+curl -H "Content-Type: text/plain" -H "secret: howdy" --data-binary @move-snake.dwl http://{hostname}/dw
+```
+
+#### Notes
+ - if the app is restarted the behavior is reset to `resources/dw/move-snake.dwl`
+ - the secret can be changed in `resources/application.yaml`
 
 ## Playing Battlesnake
 

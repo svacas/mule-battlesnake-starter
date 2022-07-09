@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd ">
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
     <http:listener-config name="battlesnake-api-httpListenerConfig">
         <http:listener-connection host="0.0.0.0" port="8081" />
     </http:listener-config>
     <apikit:config name="battlesnake-api-config" api="api/battlesnake-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
     <configuration-properties doc:name="Configuration properties" doc:id="3828176e-9ddb-46aa-a8cf-e6b42e24bf3d" file="application.yaml" />
+	<os:config name="ObjectStore_Config" doc:name="ObjectStore Config" doc:id="a9c5d5bc-9c56-494f-9a5f-84be70bd080c" />
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="4b9c9242-776d-4f68-a3c9-8b7f11996448" persistent="false" config-ref="ObjectStore_Config" />
+	<validation:config name="Validation_Config" doc:name="Validation Config" doc:id="c0aca5a1-7569-482c-862a-78ddede4579e" />
 	<flow name="battlesnake-api-main">
         <http:listener config-ref="battlesnake-api-httpListenerConfig" path="/api/*">
             <http:response statusCode="#[vars.httpStatus default 200]">
@@ -121,16 +126,34 @@ output application/json
     <flow name="post:\move:application\json:battlesnake-api-config">
         <logger level="INFO" message="#['Move Game $(payload.game.id)']" />
 		<logger level="INFO" doc:name="Logger" doc:id="1423365b-9bc2-4e2e-9f28-a85fa84de445" message="#[payload]"/>
-		<ee:transform doc:name="Transform Message" doc:id="54a59f57-b3b2-49c9-9df1-ea5de079e976" >
-			<ee:message >
-				<ee:set-payload resource="dw/move-snake.dwl" />
-			</ee:message>
-		</ee:transform>
+        <os:retrieve doc:name="Retrieve" doc:id="7666bb28-91c8-4f25-b763-9f1a799c5041" key="move_snake" objectStore="Object_store" target="move_snake">
+            <os:default-value ><![CDATA[#[readUrl('classpath://dw/move-snake.dwl', 'text/plain')]]]></os:default-value>
+        </os:retrieve>
+		<ee:dynamic-evaluate doc:name="Dynamic Evaluate" doc:id="58c156d8-adac-47be-ab5a-374b8bc0f6ab" expression="#[vars.move_snake]"/>
     </flow>
+
     <flow name="post:\end:application\json:battlesnake-api-config">
         <logger level="INFO" message="#['End Game $(payload.game.id)']" />
 		<logger level="INFO" doc:name="Logger" doc:id="e9f0dd37-688a-4c17-9213-f7139eef0e9b" message="#[payload]"/>
     </flow>
 
+    <flow name="dw">
+        <http:listener config-ref="battlesnake-api-httpListenerConfig" path="/dw" >
+			<http:error-response statusCode="401" />
+		</http:listener>
+        <logger message="#['updating/retrieving script::secret=' ++ (attributes.headers.secret default 'not provided')]" level="INFO"/>
+		<validation:is-true doc:name="Is true" doc:id="e4054cae-d89d-46ae-9b93-4002309ab6e6" expression="#[attributes.headers.secret == p('admin.secret')]" message="no way"/>
+		<choice doc:name="Choice" doc:id="1de948de-9fb4-41d0-8046-f1b2374d3fb1" >
+			<when expression="#[attributes.method == 'POST']">
+				<os:store doc:name="Store" doc:id="fe4234ec-05a5-4d0f-9eab-76c3b3f2d408" key="move_snake" objectStore="Object_store"/>
+				<logger message="#[payload]"/>
+			</when>
+			<otherwise>
+				<os:retrieve doc:name="Retrieve" doc:id="0f7e8fd1-c901-451a-a929-79932146fb4f" key="move_snake" objectStore="Object_store" >
+					<os:default-value ><![CDATA[#[readUrl('classpath://dw/move-snake.dwl', 'text/plain')]]]></os:default-value>
+				</os:retrieve>
+			</otherwise>
+		</choice>
+    </flow>
 
 </mule>

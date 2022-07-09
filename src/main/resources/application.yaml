@@ -6,3 +6,5 @@ battlesnake:
     "head" : "default"
     "tail" : "default"
     "version" : "0.0.1-beta"
+admin:
+  secret: "howdy"
